@@ -1,0 +1,41 @@
+{
+    "manifest_version": 3,
+    "name": "Flagged",
+    "version": "0.7.2",
+    "description": "Filter X timeline based on account country / app store region.",
+    "permissions": ["storage"],
+    "icons": {
+      "16": "icons/flagged_16.png",
+      "32": "icons/flagged_32.png",
+      "48": "icons/flagged_48.png",
+      "128": "icons/flagged_128.png"
+    },
+    "host_permissions": [
+      "https://x.com/*",
+      "https://twitter.com/*"
+    ],
+    "content_scripts": [
+      {
+        "matches": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "js": ["content.js"],
+        "run_at": "document_idle"
+      }
+    ],
+    "action": {
+      "default_title": "Flagged",
+      "default_popup": "options.html",
+      "default_icon": {
+        "16": "icons/flagged_on.png",
+        "32": "icons/flagged_on.png",
+        "48": "icons/flagged_on.png",
+        "128": "icons/flagged_on.png"
+      }
+    },
+    "options_page": "options.html",
+    "background": {
+      "service_worker": "background.js"
+    }
+  }
