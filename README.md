@@ -27,6 +27,7 @@ Everything runs locally. No external servers, no analytics, no data leaves your 
 3. Enable "Developer mode"
 4. Click "Load unpacked" and select this folder
 5. Open X and watch the flags appear
+6. (optional) Check https://t.me/pillgatess for updated databases.
 
 ## Settings
 
