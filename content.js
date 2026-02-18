@@ -33,6 +33,7 @@ function isPermalinkView() {
 function handleRouteChange() {
   if (location.pathname === lastPathname) return;
   lastPathname = location.pathname;
+  refreshOwnHandle();
   resetCheckedFlags();
   filterPage();
 }
@@ -320,6 +321,28 @@ async function bgCachePut(handle, country) {
 // global on/off
 let noJeetEnabled = true;
 let rateLimitedUntil = 0;
+let ownHandle = null;
+
+function isBookmarksView() {
+  return (
+    location.pathname === "/i/bookmarks" ||
+    location.pathname.startsWith("/i/bookmarks/")
+  );
+}
+
+function refreshOwnHandle() {
+  const profileLink = document.querySelector(
+    'a[data-testid="AppTabBar_Profile_Link"]'
+  );
+  if (profileLink) {
+    const href = profileLink.getAttribute("href") || "";
+    const part = href.split("/").filter(Boolean)[0];
+    if (part && !RESERVED_PATHS.has(part)) {
+      ownHandle = part.toLowerCase();
+      log("[Flagged] Own handle detected:", ownHandle);
+    }
+  }
+}
 
 function log(...args) {
   if (showLogs) console.log(...args);
@@ -1181,10 +1204,11 @@ function addOverlay(el, country) {
 
   const countryLabel = country || "unknown";
   const btn = document.createElement("button");
-  btn.innerHTML = `<div>user is from</div><div>⚠️${countryLabel}⚠️</div><div>reveal anyway</div>`;
+  btn.innerHTML = `<div>user is from</div><div>⚠️${countryLabel}⚠️</div><div>click to reveal</div>`;
   btn.style.position = "absolute";
-  btn.style.top = "6px";
-  btn.style.right = "6px";
+  btn.style.top = "50%";
+  btn.style.left = "50%";
+  btn.style.transform = "translate(-50%, -50%)";
   btn.style.padding = "6px 12px";
   btn.style.background = "rgba(0,0,0,0.9)";
   btn.style.color = "#fff";
@@ -1229,16 +1253,14 @@ function applyFilterToElement(el, cached, handle) {
   const isWhite = handle ? isWhitelisted(handle) : false;
   const isBlack = handle ? isBlacklisted(handle) : false;
   const bypass = shouldBypassFiltering(el, { isBlacklisted: isBlack });
+  const isSelf = !!(ownHandle && handle && canonicalHandle(handle) === ownHandle);
 
   if (cached) renderFlagBadge(el, cached);
 
-  if (isWhite) {
-    return;
-  }
-
-  if (bypass) {
-    return;
-  }
+  if (isWhite) return;
+  if (bypass) return;
+  if (isSelf) return;            // own posts: keep flags, skip hiding
+  if (isBookmarksView()) return; // bookmarks: keep flags, skip hiding
 
   const shouldFilter = isBlack || (cached && cached.shouldFilter);
   const countryLabel = cached?.country || null;
@@ -1359,10 +1381,13 @@ function start() {
   }
   started = true;
 
+  refreshOwnHandle();
+
   // Observe timeline changes (skip chat views)
   if (!IS_CHAT_VIEW) {
     new MutationObserver(() => {
       try {
+        if (!ownHandle) refreshOwnHandle();
         filterPage();
       } catch (e) {
         console.warn("[Flagged] filterPage failed", e);

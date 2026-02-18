@@ -745,7 +745,7 @@ document.addEventListener("DOMContentLoaded", () => {
     .getElementById("aboutButton")
     .addEventListener("click", () => {
       // TODO: Update this URL when website is ready
-      const websiteUrl = "https://pillgates.dev";
+      const websiteUrl = "https://pillgates.dev/flagged";
       window.open(websiteUrl, "_blank");
     });
   window.addEventListener("beforeunload", saveOptions);
