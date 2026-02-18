@@ -564,25 +564,36 @@ function importDbFromFile(file) {
         setProgress(60);
         el.textContent = "Merging entries...";
         const merged = { ...(existing || {}) };
+        let addedCount = 0;
+        let updatedCount = 0;
         for (const [handle, entry] of Object.entries(imported)) {
           if (!entry || typeof entry !== "object") continue;
-          if (!merged[handle] || (entry.lastChecked && entry.lastChecked > (merged[handle].lastChecked || 0))) {
+          if (!merged[handle]) {
             merged[handle] = entry;
+            addedCount++;
+          } else if (entry.lastChecked && entry.lastChecked > (merged[handle].lastChecked || 0)) {
+            merged[handle] = entry;
+            updatedCount++;
           }
         }
 
         setProgress(80);
         el.textContent = "Saving to database...";
-        idbImportEntries(merged).then((mergedCount) => {
+        idbImportEntries(merged).then(() => {
           setProgress(90);
           idbCount().then((count) => {
             updateCacheCount(count || 0);
             setProgress(100);
-            el.textContent = `Imported/merged ${mergedCount} entries.`;
+            const parts = [];
+            if (addedCount > 0) parts.push(`${addedCount.toLocaleString()} new`);
+            if (updatedCount > 0) parts.push(`${updatedCount.toLocaleString()} updated`);
+            el.textContent = parts.length
+              ? `Merged: ${parts.join(", ")} — ${(count || 0).toLocaleString()} total.`
+              : `Already up to date — ${(count || 0).toLocaleString()} entries.`;
             setTimeout(() => {
               hideProgress();
               el.textContent = "";
-            }, 3000);
+            }, 4000);
           });
         });
       }).catch(() => {

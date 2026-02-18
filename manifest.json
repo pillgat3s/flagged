@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
     "name": "Flagged",
-    "version": "0.7.3",
-    "description": "Filter X timeline based on account country / app store region.",
+    "version": "0.8.8",
+    "description": "Filter your X (Twitter) timeline by country. Blur or hide posts, show country flags, whitelist/blacklist handles. Local cache.",
     "permissions": ["storage"],
     "icons": {
       "16": "icons/flagged_16.png",
