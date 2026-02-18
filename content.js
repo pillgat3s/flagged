@@ -6,7 +6,6 @@ const DEFAULT_BLOCKED = ["India"];
 const DEFAULT_WHITELIST = [];
 const DEFAULT_BLACKLIST = [];
 let blockedCountries = [...DEFAULT_BLOCKED];
-let showLogs = false;
 let hideMode = "blur";
 let fetchNewAccounts = true;
 let showFlags = true;
@@ -270,15 +269,11 @@ async function bgCacheGet(handle) {
         (res) => {
           const err = chrome.runtime.lastError;
           if (err) {
-            warn("[Flagged] cache:get failed:", err.message || err);
             resolve(null);
             return;
           }
 
           if (!res || res.ok === false) {
-            if (res && res.error) {
-              warn("[Flagged] cache:get error:", res.error);
-            }
             resolve(null);
             return;
           }
@@ -299,16 +294,8 @@ async function bgCachePut(handle, country) {
     try {
       chrome.runtime.sendMessage(
         { type: "cache:put", handle: key, country, lastChecked: Date.now() },
-        (res) => {
-          const err = chrome.runtime.lastError;
-          if (err) {
-            warn("[Flagged] cache:put failed:", err.message || err);
-            resolve();
-            return;
-          }
-          if (res && res.ok === false && res.error) {
-            warn("[Flagged] cache:put error:", res.error);
-          }
+        () => {
+          chrome.runtime.lastError; // suppress unchecked error
           resolve();
         }
       );
@@ -339,17 +326,8 @@ function refreshOwnHandle() {
     const part = href.split("/").filter(Boolean)[0];
     if (part && !RESERVED_PATHS.has(part)) {
       ownHandle = part.toLowerCase();
-      log("[Flagged] Own handle detected:", ownHandle);
     }
   }
-}
-
-function log(...args) {
-  if (showLogs) console.log(...args);
-}
-
-function warn(...args) {
-  if (showLogs) console.warn(...args);
 }
 
 // -----------------------------
@@ -376,7 +354,7 @@ function setExtensionStatus(state) {
       chrome.action.setBadgeText({ text: "" });
     }
   } catch (e) {
-    warn("[Flagged] Failed to set badge:", e);
+    // ignore badge errors
   }
 }
 
@@ -390,7 +368,6 @@ function loadSettings() {
       blockedCountries: DEFAULT_BLOCKED,
       extensionEnabled: true,
       enabled: true, // legacy key
-      showLogs: false,
       fetchNewAccounts: true,
       hideMode: "blur",
       filterMode: "blocklist",
@@ -405,7 +382,6 @@ function loadSettings() {
         data.blockedCountries ||
         DEFAULT_BLOCKED;
 
-      showLogs = !!data.showLogs;
       hideMode = data.hideMode || "blur";
       fetchNewAccounts =
         data.fetchNewAccounts !== undefined
@@ -428,19 +404,6 @@ function loadSettings() {
           : data.enabled;
 
       applyEnabledState(enabledFromStorage !== false);
-
-      log("[Flagged] Settings loaded:", {
-        blockedCountries,
-        enabled: noJeetEnabled,
-        showLogs,
-        fetchNewAccounts,
-    hideMode,
-    filterMode,
-    showFlags,
-    showFlagsFilteredOnly,
-    whitelist: whitelistHandles.size,
-    blacklist: blacklistHandles.size
-  });
 
       recomputeCacheMatches();
       if (noJeetEnabled) filterPage();
@@ -470,17 +433,10 @@ if (chrome.storage && chrome.storage.onChanged) {
           ? changes.extensionEnabled.newValue
           : changes.enabled.newValue;
         applyEnabledState(newVal !== false);
-        log("[Flagged] Enabled changed:", noJeetEnabled);
-      }
-
-      if (changes.showLogs) {
-        showLogs = !!changes.showLogs.newValue;
-        log("[Flagged] showLogs changed:", showLogs);
       }
 
       if (changes.filterMode) {
         filterMode = changes.filterMode.newValue || "blocklist";
-        log("[Flagged] filterMode changed:", filterMode);
         recomputeCacheMatches();
         resetCheckedFlags();
         if (noJeetEnabled) filterPage();
@@ -488,14 +444,12 @@ if (chrome.storage && chrome.storage.onChanged) {
 
       if (changes.showFlags) {
         showFlags = !!changes.showFlags.newValue;
-        log("[Flagged] showFlags changed:", showFlags);
         resetCheckedFlags();
         if (noJeetEnabled) filterPage();
       }
 
       if (changes.showFlagsFilteredOnly) {
         showFlagsFilteredOnly = !!changes.showFlagsFilteredOnly.newValue;
-        log("[Flagged] showFlagsFilteredOnly changed:", showFlagsFilteredOnly);
         resetCheckedFlags();
         if (noJeetEnabled) filterPage();
       }
@@ -503,12 +457,10 @@ if (chrome.storage && chrome.storage.onChanged) {
       if (changes.fetchNewAccounts) {
         fetchNewAccounts = !!changes.fetchNewAccounts.newValue;
         if (!fetchNewAccounts) handleQueue.length = 0;
-        log("[Flagged] fetchNewAccounts changed:", fetchNewAccounts);
       }
 
       if (changes.hideMode) {
         hideMode = changes.hideMode.newValue || "blur";
-        log("[Flagged] hideMode changed:", hideMode);
         resetCheckedFlags();
         filterPage();
       }
@@ -519,7 +471,6 @@ if (chrome.storage && chrome.storage.onChanged) {
           changes.blockedCountries?.newValue ||
           DEFAULT_BLOCKED;
         blockedCountries = updatedList;
-        log("[Flagged] blocked list changed:", blockedCountries);
         recomputeCacheMatches();
         resetCheckedFlags();
         if (noJeetEnabled) filterPage();
@@ -531,11 +482,6 @@ if (chrome.storage && chrome.storage.onChanged) {
         const blacklist =
           changes.blacklist?.newValue || Array.from(blacklistHandles);
         setHandleLists(whitelist, blacklist);
-        log(
-          "[Flagged] whitelist/blacklist changed:",
-          whitelistHandles.size,
-          blacklistHandles.size
-        );
         resetCheckedFlags();
         if (noJeetEnabled) filterPage();
       }
@@ -548,17 +494,11 @@ if (chrome.storage && chrome.storage.onChanged) {
 // -----------------------------
 function loadLocalDB() {
   try {
-    chrome.runtime.sendMessage({ type: "cache:count" }, (res) => {
-      const count =
-        res && res.ok !== false && typeof res.count === "number"
-          ? res.count
-          : null;
-      if (count !== null) {
-        log("[Flagged] Local DB ready, entries:", count);
-      }
+    chrome.runtime.sendMessage({ type: "cache:count" }, () => {
+      chrome.runtime.lastError; // suppress unchecked error
     });
   } catch (e) {
-    warn("[Flagged] Failed to query cache count:", e);
+    // ignore
   }
 }
 
@@ -871,8 +811,7 @@ function requestCacheEntry(handle) {
       if (fetchNewAccounts) enqueue(handle);
       return null;
     })
-    .catch((e) => {
-      warn("[Flagged] requestCacheEntry failed:", e);
+    .catch(() => {
       if (fetchNewAccounts) enqueue(handle);
       return null;
     })
@@ -996,7 +935,6 @@ async function processQueue() {
     });
 
     if (res.status === 429) {
-      warn("[Flagged] Hit rate limit (429) for", handle);
       rateLimitedUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
       try { chrome.storage.local.set({ rateLimitedUntil }); } catch (_) {}
       setExtensionStatus("rate_limited");
@@ -1005,12 +943,6 @@ async function processQueue() {
     }
 
     if (!res.ok) {
-      warn(
-        "[Flagged] AboutAccountQuery failed for",
-        handle,
-        "status:",
-        res.status
-      );
       countryCache.set(handle, buildCacheEntry(null));
       return;
     }
@@ -1019,7 +951,6 @@ async function processQueue() {
     try {
       json = await res.json();
     } catch (e) {
-      warn("[Flagged] Failed to parse JSON for", handle, e);
       countryCache.set(handle, buildCacheEntry(null));
       return;
     }
@@ -1031,16 +962,11 @@ async function processQueue() {
     countryCache.set(handle, buildCacheEntry(country));
     saveEntryToLocalDB(handle, country); // <-- persist to DB
 
-    log(
-      `[Flagged] @${handle} → ${country || "unknown"} → filtered=${countryCache.get(handle)?.shouldFilter}`
-    );
-
     if (noJeetEnabled) {
       setExtensionStatus("active");
       try { chrome.storage.local.remove("rateLimitedUntil"); } catch (_) {}
     }
   } catch (e) {
-    warn("[Flagged] Error fetching country for", handle, e);
     countryCache.set(handle, buildCacheEntry(null));
   } finally {
     activeFetches--;
@@ -1189,7 +1115,7 @@ function renderFlagBadge(el, cached) {
 // -----------------------------
 // Blur overlay
 // -----------------------------
-function addOverlay(el, country) {
+function addOverlay(el, country, isBlacklisted = false) {
   if (!noJeetEnabled) return;
   if (el.dataset.flaggedHidden === "1") return;
   if (el.dataset.flaggedBlured === "1" || el.dataset.flaggedRevealed === "1") return;
@@ -1204,7 +1130,9 @@ function addOverlay(el, country) {
 
   const countryLabel = country || "unknown";
   const btn = document.createElement("button");
-  btn.innerHTML = `<div>user is from</div><div>⚠️${countryLabel}⚠️</div><div>click to reveal</div>`;
+  btn.innerHTML = isBlacklisted
+    ? `<div>user is on your</div><div>⚠️blacklist⚠️</div><div>click to reveal</div>`
+    : `<div>user is from</div><div>⚠️${countryLabel}⚠️</div><div>click to reveal</div>`;
   btn.style.position = "absolute";
   btn.style.top = "50%";
   btn.style.left = "50%";
@@ -1274,7 +1202,7 @@ function applyFilterToElement(el, cached, handle) {
     return;
   }
 
-  addOverlay(el, countryLabel);
+  addOverlay(el, countryLabel, isBlack);
 }
 
 function checkTweet(tweetEl) {
@@ -1435,7 +1363,6 @@ function checkExtensionContext() {
 function onContextInvalidated() {
   if (contextDead) return;
   contextDead = true;
-  warn("[Flagged] Extension context invalidated — DB writes are paused.");
   showContextBanner();
 }
 
@@ -1491,4 +1418,3 @@ if (document.readyState === "loading") {
   start();
 }
 
-log("[Flagged] Loaded with DB bridge + enable flag + exact country match");
