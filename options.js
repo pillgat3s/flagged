@@ -6,7 +6,6 @@ const DEFAULT_SETTINGS = {
   filterMode: "blocklist", // "blocklist" | "allowlist" | "flag_only"
   whitelist: [],           // array of handles
   extensionEnabled: true,
-  showLogs: false,
   fetchNewAccounts: true,
   showFlags: true,
   showFlagsFilteredOnly: false,
@@ -15,7 +14,6 @@ const DEFAULT_SETTINGS = {
 
 const CACHE_KEY = "flagged_cache";
 let currentExtensionEnabled = DEFAULT_SETTINGS.extensionEnabled;
-let currentShowLogs = DEFAULT_SETTINGS.showLogs;
 let currentFetchNewAccounts = DEFAULT_SETTINGS.fetchNewAccounts;
 let currentHideMode = DEFAULT_SETTINGS.hideMode;
 let currentShowFlags = DEFAULT_SETTINGS.showFlags;
@@ -238,7 +236,6 @@ function saveOptions() {
   const filterMode = document.getElementById("filterMode").value;
   const whitelistText = document.getElementById("whitelist").value;
   const blacklistText = document.getElementById("blacklist").value;
-  currentShowLogs = document.getElementById("showLogs").checked;
   currentFetchNewAccounts = document.getElementById("fetchNew").checked;
   currentHideMode = hideMode;
   currentShowFlags = document.getElementById("showFlags").checked;
@@ -282,7 +279,6 @@ function saveOptions() {
       filterMode,
       whitelist,
       extensionEnabled: currentExtensionEnabled,
-      showLogs: currentShowLogs,
       fetchNewAccounts: currentFetchNewAccounts,
       showFlags: currentShowFlags,
       showFlagsFilteredOnly: currentShowFlagsFilteredOnly,
@@ -315,10 +311,6 @@ function restoreOptions() {
       data.extensionEnabled !== undefined
         ? !!data.extensionEnabled
         : DEFAULT_SETTINGS.extensionEnabled;
-    currentShowLogs =
-      data.showLogs !== undefined
-        ? !!data.showLogs
-        : DEFAULT_SETTINGS.showLogs;
     currentFetchNewAccounts =
       data.fetchNewAccounts !== undefined
         ? !!data.fetchNewAccounts
@@ -337,7 +329,6 @@ function restoreOptions() {
       whitelist.map((h) => "@" + h).join("\n");
     document.getElementById("blacklist").value =
       blacklist.map((h) => "@" + h).join("\n");
-    document.getElementById("showLogs").checked = currentShowLogs;
     document.getElementById("fetchNew").checked = currentFetchNewAccounts;
     document.getElementById("hideModeToggle").checked = hideMode === "hide";
     document.getElementById("showFlags").checked = currentShowFlags;
@@ -400,19 +391,6 @@ function toggleExtension(e) {
       }
     }
   );
-}
-
-function onShowLogsChange(e) {
-  currentShowLogs = e.target.checked;
-  chrome.storage.sync.set({ showLogs: currentShowLogs }, () => {
-    const el = document.getElementById("extensionToggleStatus");
-    if (el) {
-      el.textContent = currentShowLogs
-        ? "Console logging enabled"
-        : "Console logging disabled";
-      setTimeout(() => (el.textContent = ""), 1500);
-    }
-  });
 }
 
 function onFetchNewChange(e) {
@@ -691,9 +669,6 @@ document.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("toggleExtension")
     .addEventListener("change", toggleExtension);
-  document
-    .getElementById("showLogs")
-    .addEventListener("change", onShowLogsChange);
   document
     .getElementById("fetchNew")
     .addEventListener("change", onFetchNewChange);

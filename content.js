@@ -1225,7 +1225,10 @@ function checkTweet(tweetEl) {
   }
 
   if (isBlack) {
-    applyFilterToElement(tweetEl, null, authorHandle);
+    if (tweetEl.dataset.flaggedProcessedAuthor !== "1") {
+      applyFilterToElement(tweetEl, null, authorHandle);
+      tweetEl.dataset.flaggedProcessedAuthor = "1";
+    }
   }
 
   // Always enqueue so we fetch new accounts even if DB lookup stalls
@@ -1259,7 +1262,10 @@ function checkUserCell(cellEl) {
   }
 
   if (isBlack) {
-    applyFilterToElement(cellEl, null, handle);
+    if (cellEl.dataset.flaggedProcessed !== "1") {
+      applyFilterToElement(cellEl, null, handle);
+      cellEl.dataset.flaggedProcessed = "1";
+    }
   }
 
   if (fetchNewAccounts) enqueue(handle);
