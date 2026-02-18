@@ -1,6 +1,6 @@
 # Flagged
 
-Chrome extension that shows you where X/Twitter accounts are actually from and lets you filter your timeline by country.
+Free Chrome extension that displays country flags next to X/Twitter usernames and lets you filter your timeline by account location.
 
 ## What it does
 
@@ -16,25 +16,22 @@ Chrome extension that shows you where X/Twitter accounts are actually from and l
 
 ## How it works
 
-Flagged uses X's internal `AboutAccountQuery` GraphQL endpoint to look up where each account is registered. Results get cached locally in IndexedDB so the same account never needs to be fetched twice. The extension is rate-limit aware and backs off automatically when X pushes back.
+Flagged uses X's internal `AboutAccountQuery` GraphQL endpoint to look up where each account is registered. Results get cached locally in IndexedDB — supporting 300,000+ accounts — so the same account never needs to be fetched twice. The extension is rate-limit aware and backs off automatically when X pushes back.
 
 Everything runs locally. No external servers, no analytics, no data leaves your browser.
 
 ## Install
 
-1. Clone or download this repo
-2. Go to `chrome://extensions`
-3. Enable "Developer mode"
-4. Click "Load unpacked" and select this folder
-5. Open X and watch the flags appear
-6. (optional) Check https://t.me/pillgatess for updated databases.
+1. Install from the Chrome Web Store (no signup required), or load unpacked from this repo
+2. Optionally import a pre-loaded database from https://t.me/pillgatess to start filtering immediately
+3. Open X and watch the flags appear
 
 ## Settings
 
 Click the extension icon to access:
 
 - **Filter mode** — blocklist, allowlist, or flag only
-- **Locations** — countries to filter (names, ISO codes, or flag emojis all work)
+- **Locations** — countries to filter (names, ISO codes, flag emojis, or continents all work)
 - **Hide mode** — blur with reveal vs. fully remove
 - **Whitelist/Blacklist** — per-handle overrides
 - **Database** — export, import, merge, or clear your local cache
