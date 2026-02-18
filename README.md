@@ -23,7 +23,7 @@ Everything runs locally. No external servers, no analytics, no data leaves your 
 ## Install
 
 1. Install from the Chrome Web Store (no signup required), or load unpacked from this repo
-2. Optionally import a pre-loaded database from https://t.me/pillgatess to start filtering immediately
+2. Optionally import a pre-loaded database from https://t.me/pillgatesflagged to start filtering immediately
 3. Open X and watch the flags appear
 
 ## Settings
