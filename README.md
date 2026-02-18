@@ -16,7 +16,7 @@ Free Chrome extension that displays country flags next to X/Twitter usernames an
 
 ## How it works
 
-Flagged uses X's internal `AboutAccountQuery` GraphQL endpoint to look up where each account is registered. Results get cached locally in IndexedDB — supporting 300,000+ accounts — so the same account never needs to be fetched twice. The extension is rate-limit aware and backs off automatically when X pushes back.
+Flagged uses X's internal `AboutAccountQuery` GraphQL endpoint to look up where each account is registered. Results get cached locally in IndexedDB — no hard limit on account capacity — so the same account never needs to be fetched twice. The extension is rate-limit aware and backs off automatically when X pushes back.
 
 Everything runs locally. No external servers, no analytics, no data leaves your browser.
 
