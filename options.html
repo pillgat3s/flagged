@@ -118,6 +118,18 @@
         gap: 10px;
       }
       .badge { display: none; }
+      .count-badge {
+        display: none;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1;
+        padding: 3px 7px;
+        border-radius: 99px;
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--text-secondary);
+        margin-right: 4px;
+      }
+      .count-badge.has-items { display: inline-block; }
 
       /* ---- Main toggle switch ---- */
       .switch {
@@ -629,6 +641,7 @@
               <div class="card-title">Locations</div>
               <div class="card-desc">Names, codes, or emojis — one per line</div>
             </div>
+            <span class="count-badge" id="locationsCount"></span>
             <svg class="card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
           </div>
           <div class="card-body"><div class="card-body-inner">
@@ -691,6 +704,7 @@
               <div class="card-title">Whitelist</div>
               <div class="card-desc">Always show — one handle per line</div>
             </div>
+            <span class="count-badge" id="whitelistCount"></span>
             <svg class="card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
           </div>
           <div class="card-body"><div class="card-body-inner">
@@ -709,6 +723,7 @@
               <div class="card-title">Blacklist</div>
               <div class="card-desc">Always hide — overrides whitelist</div>
             </div>
+            <span class="count-badge" id="blacklistCount"></span>
             <svg class="card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
           </div>
           <div class="card-body"><div class="card-body-inner">

@@ -260,27 +260,14 @@ const RECOMMENDED_LABEL_MARKERS = [
 ];
 let lastPathname = location.pathname;
 async function bgCacheGet(handle) {
+  const key = canonicalHandle(handle);
+  if (!key) return null;
   return new Promise((resolve) => {
-    const key = canonicalHandle(handle);
-    if (!key) return resolve(null);
     try {
-      chrome.runtime.sendMessage(
-        { type: "cache:get", handle: key },
-        (res) => {
-          const err = chrome.runtime.lastError;
-          if (err) {
-            resolve(null);
-            return;
-          }
-
-          if (!res || res.ok === false) {
-            resolve(null);
-            return;
-          }
-
-          resolve(res.result || null);
-        }
-      );
+      chrome.storage.local.get("fc_" + key, (result) => {
+        if (chrome.runtime.lastError) return resolve(null);
+        resolve(result["fc_" + key] || null);
+      });
     } catch (e) {
       resolve(null);
     }
@@ -288,21 +275,15 @@ async function bgCacheGet(handle) {
 }
 
 async function bgCachePut(handle, country) {
-  return new Promise((resolve) => {
-    const key = canonicalHandle(handle);
-    if (!key) return resolve();
-    try {
-      chrome.runtime.sendMessage(
-        { type: "cache:put", handle: key, country, lastChecked: Date.now() },
-        () => {
-          chrome.runtime.lastError; // suppress unchecked error
-          resolve();
-        }
-      );
-    } catch (e) {
-      resolve();
-    }
-  });
+  const key = canonicalHandle(handle);
+  if (!key) return;
+  try {
+    chrome.storage.local.set({
+      ["fc_" + key]: { country: country || null, lastChecked: Date.now() }
+    });
+  } catch (e) {
+    // ignore
+  }
 }
 
 // global on/off
@@ -493,13 +474,7 @@ if (chrome.storage && chrome.storage.onChanged) {
 // Persistent DB helpers
 // -----------------------------
 function loadLocalDB() {
-  try {
-    chrome.runtime.sendMessage({ type: "cache:count" }, () => {
-      chrome.runtime.lastError; // suppress unchecked error
-    });
-  } catch (e) {
-    // ignore
-  }
+  // no-op: cache now lives in chrome.storage.local, no background ping needed
 }
 
 function saveEntryToLocalDB(handle, country) {
@@ -939,6 +914,7 @@ async function processQueue() {
       try { chrome.storage.local.set({ rateLimitedUntil }); } catch (_) {}
       setExtensionStatus("rate_limited");
       countryCache.set(handle, buildCacheEntry(null));
+      handleQueue.length = 0; // clear backlog — only re-queue what's visible after backoff
       return;
     }
 

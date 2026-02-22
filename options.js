@@ -24,10 +24,6 @@ let rateLimitInterval = null;
 let suppressBlockedAutoSave = false;
 const ICON_ON = "icons/flagged_on.png";
 const ICON_OFF = "icons/flagged_off.png";
-const DB_NAME = "flagged-db";
-const DB_STORE = "cache";
-const DB_VERSION = 1;
-let cacheDbPromise = null;
 
 // --- Flag → country helper (minimal mapping + code fallback) ---
 
@@ -109,114 +105,74 @@ function expandFlagsInLine(line) {
   return result;
 }
 
-// --- IndexedDB helpers for cache ---
-function supportsIndexedDB() {
-  return typeof indexedDB !== "undefined";
-}
-
-function openCacheDb() {
-  if (cacheDbPromise) return cacheDbPromise;
-  if (!supportsIndexedDB()) {
-    cacheDbPromise = Promise.reject(new Error("IndexedDB not supported"));
-    return cacheDbPromise;
-  }
-
-  cacheDbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(DB_STORE)) {
-        db.createObjectStore(DB_STORE, { keyPath: "handle" });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-
-  return cacheDbPromise;
-}
+// --- chrome.storage.local helpers for cache (keys use "fc_" prefix) ---
 
 async function idbCount() {
-  try {
-    const db = await openCacheDb();
-    return await new Promise((resolve) => {
-      const tx = db.transaction(DB_STORE, "readonly");
-      const store = tx.objectStore(DB_STORE);
-      const req = store.count();
-      req.onsuccess = () => resolve(req.result || 0);
-      req.onerror = () => resolve(0);
-    });
-  } catch (e) {
-    console.warn("[Flagged] IDB count failed", e);
-    return 0;
-  }
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get(null, (items) => {
+        if (chrome.runtime.lastError) return resolve(0);
+        resolve(Object.keys(items).filter(k => k.startsWith("fc_")).length);
+      });
+    } catch (e) {
+      resolve(0);
+    }
+  });
 }
 
 async function idbClear() {
-  try {
-    const db = await openCacheDb();
-    await new Promise((resolve) => {
-      const tx = db.transaction(DB_STORE, "readwrite");
-      const store = tx.objectStore(DB_STORE);
-      const req = store.clear();
-      req.onsuccess = () => resolve();
-      req.onerror = () => resolve();
-    });
-  } catch (e) {
-    console.warn("[Flagged] IDB clear failed", e);
-  }
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get(null, (items) => {
+        if (chrome.runtime.lastError) return resolve();
+        const keys = Object.keys(items).filter(k => k.startsWith("fc_"));
+        if (keys.length === 0) return resolve();
+        chrome.storage.local.remove(keys, () => resolve());
+      });
+    } catch (e) {
+      resolve();
+    }
+  });
 }
 
 async function idbExportAll() {
-  const out = {};
-  try {
-    const db = await openCacheDb();
-    await new Promise((resolve) => {
-      const tx = db.transaction(DB_STORE, "readonly");
-      const store = tx.objectStore(DB_STORE);
-      const req = store.openCursor();
-      req.onsuccess = (event) => {
-        const cursor = event.target.result;
-        if (cursor) {
-          out[cursor.key] = cursor.value;
-          cursor.continue();
-        } else {
-          resolve();
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get(null, (items) => {
+        if (chrome.runtime.lastError) return resolve({});
+        const out = {};
+        for (const [key, value] of Object.entries(items)) {
+          if (!key.startsWith("fc_")) continue;
+          out[key.slice(3)] = value; // strip "fc_" prefix → handle
         }
-      };
-      req.onerror = () => resolve();
-    });
-  } catch (e) {
-    console.warn("[Flagged] IDB export failed", e);
-  }
-  return out;
+        resolve(out);
+      });
+    } catch (e) {
+      resolve({});
+    }
+  });
 }
 
 async function idbImportEntries(entries) {
   if (!entries || typeof entries !== "object") return 0;
+  const toSet = {};
   let imported = 0;
-  try {
-    const db = await openCacheDb();
-    await new Promise((resolve) => {
-      const tx = db.transaction(DB_STORE, "readwrite");
-      const store = tx.objectStore(DB_STORE);
-      for (const [handle, entry] of Object.entries(entries)) {
-        if (!handle) continue;
-        if (!entry || typeof entry !== "object") continue;
-        store.put({
-          handle,
-          country: entry.country || null,
-          lastChecked: entry.lastChecked || Date.now()
-        });
-        imported++;
-      }
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
-    });
-  } catch (e) {
-    console.warn("[Flagged] IDB import failed", e);
+  for (const [handle, entry] of Object.entries(entries)) {
+    if (!handle || !entry || typeof entry !== "object") continue;
+    toSet["fc_" + handle] = {
+      country: entry.country || null,
+      lastChecked: entry.lastChecked || Date.now()
+    };
+    imported++;
   }
-  return imported;
+  if (imported === 0) return 0;
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.set(toSet, () => resolve(imported));
+    } catch (e) {
+      resolve(0);
+    }
+  });
 }
 
 // --- Save / restore settings ---
@@ -335,7 +291,27 @@ function restoreOptions() {
     currentBlacklist = blacklist;
     updateFlagFilteredToggleState();
     updateToggleButton();
+    updateListBadgesFromTextareas();
   });
+}
+
+function updateListBadge(badgeId, count) {
+  const el = document.getElementById(badgeId);
+  if (!el) return;
+  el.textContent = count;
+  el.classList.toggle("has-items", count > 0);
+}
+
+function updateListBadgesFromTextareas() {
+  const locCount = document.getElementById("blockedValues").value
+    .split("\n").filter((l) => l.trim().length > 0).length;
+  const wlCount = document.getElementById("whitelist").value
+    .split("\n").filter((l) => normalizeHandle(l)).length;
+  const blCount = document.getElementById("blacklist").value
+    .split("\n").filter((l) => normalizeHandle(l)).length;
+  updateListBadge("locationsCount", locCount);
+  updateListBadge("whitelistCount", wlCount);
+  updateListBadge("blacklistCount", blCount);
 }
 
 function updateFlagFilteredToggleState() {
@@ -691,6 +667,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("blockedValues")
     .addEventListener("input", () => {
+      updateListBadgesFromTextareas();
       if (suppressBlockedAutoSave) return;
       scheduleAutoSave(true);
     });
@@ -714,13 +691,13 @@ document.addEventListener("DOMContentLoaded", () => {
     .addEventListener("change", saveOptions);
   document
     .getElementById("whitelist")
-    .addEventListener("input", () => scheduleAutoSave(true));
+    .addEventListener("input", () => { updateListBadgesFromTextareas(); scheduleAutoSave(true); });
   document
     .getElementById("whitelist")
     .addEventListener("blur", saveOptions);
   document
     .getElementById("blacklist")
-    .addEventListener("input", () => scheduleAutoSave(true));
+    .addEventListener("input", () => { updateListBadgesFromTextareas(); scheduleAutoSave(true); });
   document
     .getElementById("blacklist")
     .addEventListener("blur", saveOptions);

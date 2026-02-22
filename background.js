@@ -70,32 +70,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ rateLimitedUntil });
     return;
   }
-
-  if (msg && msg.type === "cache:get") {
-    const handle = msg.handle;
-    openCacheDb()
-      .then((db) => idbGet(db, handle))
-      .then((result) => sendResponse({ ok: true, result }))
-      .catch((err) => sendResponse({ ok: false, error: String(err || "") }));
-    return true; // async
-  }
-
-  if (msg && msg.type === "cache:put") {
-    const { handle, country, lastChecked } = msg;
-    openCacheDb()
-      .then((db) => idbPut(db, handle, country, lastChecked))
-      .then(() => sendResponse({ ok: true }))
-      .catch((err) => sendResponse({ ok: false, error: String(err || "") }));
-    return true;
-  }
-
-  if (msg && msg.type === "cache:count") {
-    openCacheDb()
-      .then((db) => idbCount(db))
-      .then((count) => sendResponse({ ok: true, count }))
-      .catch((err) => sendResponse({ ok: false, error: String(err || "") }));
-    return true;
-  }
 });
 
 // reflect toggle changes even if no content script is alive
@@ -109,56 +83,3 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-function openCacheDb() {
-  if (cacheDbPromise) return cacheDbPromise;
-
-  cacheDbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION); 
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(DB_STORE)) {
-        db.createObjectStore(DB_STORE, { keyPath: "handle" });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-
-  return cacheDbPromise;
-}
-
-function idbGet(db, handle) {
-  if (!handle) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const tx = db.transaction(DB_STORE, "readonly");
-    const store = tx.objectStore(DB_STORE);
-    const req = store.get(handle);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => resolve(null);
-  });
-}
-
-function idbPut(db, handle, country, lastChecked) {
-  if (!handle) return Promise.resolve();
-  return new Promise((resolve) => {
-    const tx = db.transaction(DB_STORE, "readwrite");
-    const store = tx.objectStore(DB_STORE);
-    const req = store.put({
-      handle,
-      country: country || null,
-      lastChecked: lastChecked || Date.now()
-    });
-    req.onsuccess = () => resolve();
-    req.onerror = () => resolve();
-  });
-}
-
-function idbCount(db) {
-  return new Promise((resolve) => {
-    const tx = db.transaction(DB_STORE, "readonly");
-    const store = tx.objectStore(DB_STORE);
-    const req = store.count();
-    req.onsuccess = () => resolve(req.result || 0);
-    req.onerror = () => resolve(0);
-  });
-}
