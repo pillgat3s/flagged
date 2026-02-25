@@ -1134,9 +1134,16 @@ function addOverlay(el, country, isBlacklisted = false) {
 
   const countryLabel = country || "unknown";
   const btn = document.createElement("button");
-  btn.innerHTML = isBlacklisted
-    ? `<div>user is on your</div><div>⚠️blacklist⚠️</div><div>click to reveal</div>`
-    : `<div>user is from</div><div>⚠️${countryLabel}⚠️</div><div>click to reveal</div>`;
+  if (isBlacklisted) {
+    btn.innerHTML = `<div>user is on your</div><div>⚠️blacklist⚠️</div><div>click to reveal</div>`;
+  } else {
+    // Use textContent for countryLabel — it comes from storage and must not be interpolated
+    // into innerHTML (XSS: a malicious imported JSON could inject scripts into x.com's context).
+    const d1 = document.createElement("div"); d1.textContent = "user is from";
+    const d2 = document.createElement("div"); d2.textContent = `⚠️${countryLabel}⚠️`;
+    const d3 = document.createElement("div"); d3.textContent = "click to reveal";
+    btn.append(d1, d2, d3);
+  }
   btn.style.position = "absolute";
   btn.style.top = "50%";
   btn.style.left = "50%";
