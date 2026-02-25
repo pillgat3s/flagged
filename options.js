@@ -508,7 +508,7 @@ function importDbFromFile(file) {
       setProgress(20);
       el.textContent = "Parsing data...";
       const imported = JSON.parse(reader.result);
-      if (!imported || typeof imported !== "object") {
+      if (!imported || typeof imported !== "object" || Array.isArray(imported)) {
         throw new Error("Invalid JSON");
       }
 

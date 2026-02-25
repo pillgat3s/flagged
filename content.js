@@ -914,6 +914,8 @@ async function processQueue() {
       method: "GET",
       credentials: "include",
       headers: {
+        // X's public guest bearer token — same one every browser sends for unauthenticated
+        // requests. Embedded in x.com's own JS and intentionally public, not a secret.
         "Authorization":
           "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA",
         "X-Csrf-Token": csrf || ""
