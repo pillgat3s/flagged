@@ -642,6 +642,17 @@ function codeToFlagEmoji(code) {
   return String.fromCodePoint(A + (first - 65)) + String.fromCodePoint(A + (second - 65));
 }
 
+// Convert a flag emoji (regional indicator pair) to X's Twemoji CDN URL.
+// abs.twimg.com is already in X's CSP, so these images load without extra permissions.
+function flagEmojiToTwemojiUrl(emoji) {
+  if (!emoji) return null;
+  const pts = [...emoji].map(c => c.codePointAt(0));
+  if (pts.length !== 2) return null;
+  const BASE = 0x1f1e6;
+  if (pts[0] < BASE || pts[0] > 0x1f1ff || pts[1] < BASE || pts[1] > 0x1f1ff) return null;
+  return `https://abs.twimg.com/emoji/v2/72x72/${pts[0].toString(16)}-${pts[1].toString(16)}.png`;
+}
+
 function countryToFlag(country) {
   if (!country) return UNKNOWN_LOCATION_FLAG;
   const normalized = normalizeCountryName(country);
@@ -1051,7 +1062,6 @@ function renderFlagBadge(el, cached) {
 
   const badge = document.createElement("span");
   badge.className = FLAG_BADGE_CLASS;
-  badge.textContent = label;
   badge.style.marginLeft = "6px";
   badge.style.setProperty("fontSize", "14px", "important");
   badge.style.lineHeight = "1.2";
@@ -1064,6 +1074,24 @@ function renderFlagBadge(el, cached) {
   badge.style.filter = "drop-shadow(0 1px 2px rgba(0,0,0,0.35))";
   badge.style.display = "inline-flex";
   badge.style.alignItems = "center";
+
+  // Use X's own Twemoji CDN for country flag emoji — works on Windows too.
+  // Fall back to plain text for globe/continent symbols which render fine everywhere.
+  const twemojiUrl = flag ? flagEmojiToTwemojiUrl(flag) : null;
+  if (twemojiUrl) {
+    const img = document.createElement("img");
+    img.src = twemojiUrl;
+    img.alt = label;
+    img.style.width = "16px";
+    img.style.height = "16px";
+    img.style.display = "inline-block";
+    img.style.verticalAlign = "middle";
+    // On error fall back to text (e.g. if URL format changes)
+    img.addEventListener("error", () => { badge.removeChild(img); badge.textContent = label; });
+    badge.appendChild(img);
+  } else {
+    badge.textContent = label;
+  }
   badge.setAttribute(
     "aria-label",
     `Account location: ${cached.country || "unknown"}${continentText ? ` (${continentText})` : ""}`
