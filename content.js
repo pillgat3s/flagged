@@ -1088,9 +1088,14 @@ function renderFlagBadge(el, cached) {
     img.style.height = "16px";
     img.style.display = "inline-block";
     img.style.verticalAlign = "middle";
-    // On error fall back to text (e.g. if URL format changes)
-    img.addEventListener("error", () => { badge.removeChild(img); badge.textContent = label; });
+    // Pre-render text fallback hidden. On error, toggle visibility via style only —
+    // not via DOM structure changes, which would fire the MutationObserver and re-trigger filterPage.
+    const textFallback = document.createElement("span");
+    textFallback.textContent = label;
+    textFallback.style.display = "none";
+    img.addEventListener("error", () => { img.style.display = "none"; textFallback.style.display = ""; });
     badge.appendChild(img);
+    badge.appendChild(textFallback);
   } else {
     badge.textContent = label;
   }
