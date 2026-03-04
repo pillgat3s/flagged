@@ -1088,6 +1088,8 @@ function renderFlagBadge(el, cached) {
     img.style.height = "16px";
     img.style.display = "inline-block";
     img.style.verticalAlign = "middle";
+    img.style.flexShrink = "0";
+    img.style.objectFit = "contain";
     // Pre-render text fallback hidden. On error, toggle visibility via style only —
     // not via DOM structure changes, which would fire the MutationObserver and re-trigger filterPage.
     const textFallback = document.createElement("span");
