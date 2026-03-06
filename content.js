@@ -1302,6 +1302,32 @@ function checkUserCell(cellEl) {
 }
 
 
+function checkDmProfileCard() {
+  if (!noJeetEnabled) return;
+  if (!showFlags) return;
+  // DM right-panel profile card doesn't use data-testid="UserName".
+  // Instead find any profile link (single-segment href) outside tweets/usercells/nav.
+  document.querySelectorAll('a[href^="/"]:not([data-flagged-dm])').forEach((linkEl) => {
+    if (linkEl.closest('article[data-testid="tweet"]')) return;
+    if (linkEl.closest('[data-testid="UserCell"]')) return;
+    if (linkEl.closest('nav')) return;
+    if (linkEl.closest('[data-testid="SideNav_AccountSwitcher_Button"]')) return;
+    const href = linkEl.getAttribute("href") || "";
+    const parts = href.split("/").filter(Boolean);
+    if (parts.length !== 1) return; // only /{handle} links
+    if ((linkEl.textContent || "").trimStart().startsWith("@")) return; // skip @handle links
+    const handle = canonicalHandle(parts[0]);
+    if (!handle || RESERVED_PATHS.has(handle)) return;
+    linkEl.dataset.flaggedDm = "1";
+    const cached = countryCache.get(handle);
+    if (cached) { renderFlagBadge(linkEl, cached); return; }
+    requestCacheEntry(handle).then((entry) => {
+      if (!entry) return;
+      renderFlagBadge(linkEl, entry);
+    });
+  });
+}
+
 function filterPage() {
   if (!noJeetEnabled) {
     clearOverlays();
@@ -1325,6 +1351,10 @@ function filterPage() {
   document
     .querySelectorAll('div[data-testid="UserCell"]')
     .forEach(checkUserCell);
+
+  if (location.pathname.startsWith("/messages")) {
+    checkDmProfileCard();
+  }
 }
 
 function start() {
