@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Flagged",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "description": "Filter your X (Twitter) timeline by country. Blur or hide posts, show country flags, whitelist/blacklist handles. Local cache.",
     "permissions": ["storage", "unlimitedStorage"],
     "icons": {

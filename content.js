@@ -581,6 +581,88 @@ function showTooltip(text, clientX, clientY) {
   el.style.transform = "translateY(0)";
 }
 
+// -----------------------------
+// Flag badge context menu
+// -----------------------------
+let flagContextMenu = null;
+
+function hideFlagContextMenu() {
+  if (flagContextMenu) {
+    flagContextMenu.remove();
+    flagContextMenu = null;
+  }
+}
+
+function showFlagContextMenu(handle, badge, clientX, clientY) {
+  hideFlagContextMenu();
+
+  const menu = document.createElement("div");
+  menu.style.cssText = [
+    "position:fixed",
+    `left:${clientX}px`,
+    `top:${clientY}px`,
+    "z-index:1000000",
+    "background:#1a1a1a",
+    "border:1px solid rgba(255,255,255,0.12)",
+    "border-radius:10px",
+    "padding:4px",
+    "box-shadow:0 8px 24px rgba(0,0,0,0.5)",
+    "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif",
+    "font-size:13px",
+    "min-width:170px",
+  ].join(";");
+
+  const item = document.createElement("div");
+  item.textContent = `Refetch @${handle}`;
+  item.style.cssText = [
+    "padding:8px 12px",
+    "border-radius:7px",
+    "cursor:pointer",
+    "color:#e8e8e8",
+    "white-space:nowrap",
+  ].join(";");
+  item.addEventListener("mouseenter", () => { item.style.background = "rgba(255,255,255,0.08)"; });
+  item.addEventListener("mouseleave", () => { item.style.background = ""; });
+  item.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    hideFlagContextMenu();
+    refetchHandle(handle, badge);
+  });
+
+  menu.appendChild(item);
+  document.body.appendChild(menu);
+  flagContextMenu = menu;
+
+  // Keep it on screen
+  requestAnimationFrame(() => {
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth - 8) menu.style.left = `${window.innerWidth - rect.width - 8}px`;
+    if (rect.bottom > window.innerHeight - 8) menu.style.top = `${window.innerHeight - rect.height - 8}px`;
+  });
+}
+
+function refetchHandle(handle, badge) {
+  const key = canonicalHandle(handle);
+  if (!key) return;
+
+  // Clear in-memory caches
+  countryCache.delete(key);
+  dbLookupPromises.delete(key);
+
+  // Clear from persistent storage
+  try { chrome.storage.local.remove("fc_" + key); } catch (_) {}
+
+  // Remove the badge from DOM so it disappears while refetching
+  badge.remove();
+
+  // Re-enqueue — bypasses the "already cached" guard since we deleted it
+  handleQueue.push(key);
+}
+
+document.addEventListener("click", () => hideFlagContextMenu(), true);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideFlagContextMenu(); });
+
 function initRegionLookup() {
   if (regionDisplayNames) return;
   try {
@@ -887,8 +969,15 @@ function enqueue(handle) {
 }
 
 // -----------------------------
-// Fetch account country (GET)
+// Fetch account country (GET/POST with method toggling)
 // -----------------------------
+// X has separate rate limit buckets for GET and POST on the same GraphQL endpoint.
+// We track which method is currently rate-limited so we can immediately fall back
+// to the other one. Only when both are exhausted do we apply the full cooldown.
+let usePostMethod = false;
+let getRateLimitedUntil = 0;
+let postRateLimitedUntil = 0;
+
 async function processQueue() {
   if (!noJeetEnabled) return;
   if (!fetchNewAccounts) return;
@@ -910,8 +999,15 @@ async function processQueue() {
 
     const url = buildQueryUrl(handle);
 
+    // Pick the method whose bucket isn't currently rate-limited.
+    // If both are exhausted, usePostMethod stays as-is and we rely on rateLimitedUntil above.
+    const now = Date.now();
+    if (usePostMethod && now < postRateLimitedUntil) usePostMethod = false;
+    if (!usePostMethod && now < getRateLimitedUntil) usePostMethod = true;
+    const method = usePostMethod ? "POST" : "GET";
+
     const res = await fetch(url, {
-      method: "GET",
+      method,
       credentials: "include",
       headers: {
         // X's public guest bearer token — same one every browser sends for unauthenticated
@@ -923,11 +1019,26 @@ async function processQueue() {
     });
 
     if (res.status === 429) {
-      rateLimitedUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
-      try { chrome.storage.local.set({ rateLimitedUntil }); } catch (_) {}
-      setExtensionStatus("rate_limited");
-      countryCache.set(handle, buildCacheEntry(null));
-      handleQueue.length = 0; // clear backlog — only re-queue what's visible after backoff
+      // Mark this method's bucket as exhausted and flip to the other one.
+      if (usePostMethod) {
+        postRateLimitedUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
+        usePostMethod = false;
+      } else {
+        getRateLimitedUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
+        usePostMethod = true;
+      }
+
+      // Re-queue the handle so it gets retried with the other method.
+      handleQueue.unshift(handle);
+
+      // Only apply the full cooldown when both buckets are exhausted.
+      const bothExhausted = Date.now() < getRateLimitedUntil && Date.now() < postRateLimitedUntil;
+      if (bothExhausted) {
+        rateLimitedUntil = Math.min(getRateLimitedUntil, postRateLimitedUntil);
+        try { chrome.storage.local.set({ rateLimitedUntil }); } catch (_) {}
+        setExtensionStatus("rate_limited");
+        handleQueue.length = 0; // clear backlog — only re-queue what's visible after backoff
+      }
       return;
     }
 
@@ -1028,7 +1139,7 @@ function shouldShowFlag(cached) {
   return true;
 }
 
-function renderFlagBadge(el, cached) {
+function renderFlagBadge(el, cached, handle) {
   if (!shouldShowFlag(cached)) {
     removeFlagBadges(el);
     return;
@@ -1105,11 +1216,23 @@ function renderFlagBadge(el, cached) {
     "aria-label",
     `Account location: ${cached.country || "unknown"}${continentText ? ` (${continentText})` : ""}`
   );
-  badge.title = cached.country || "unknown";
-  const tooltipText = badge.title;
+  // Use a data attribute instead of title to avoid the browser's native tooltip
+  // doubling up with our custom one.
+  const tooltipText = cached.country || "unknown";
   badge.addEventListener("mouseenter", (e) => showTooltip(tooltipText, e.clientX, e.clientY));
   badge.addEventListener("mousemove", (e) => showTooltip(tooltipText, e.clientX, e.clientY));
   badge.addEventListener("mouseleave", hideTooltip);
+
+  const badgeHandle = handle ? canonicalHandle(handle) : null;
+  if (badgeHandle) {
+    badge.dataset.flaggedHandle = badgeHandle;
+    badge.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      hideTooltip();
+      showFlagContextMenu(badgeHandle, badge, e.clientX, e.clientY);
+    });
+  }
 
   const nameSpan =
     inlineRow.querySelector('span[dir="auto"] span') ||
@@ -1203,7 +1326,7 @@ function applyFilterToElement(el, cached, handle) {
   const bypass = shouldBypassFiltering(el, { isBlacklisted: isBlack });
   const isSelf = !!(ownHandle && handle && canonicalHandle(handle) === ownHandle);
 
-  if (cached) renderFlagBadge(el, cached);
+  if (cached) renderFlagBadge(el, cached, handle);
 
   if (isWhite) return;
   if (bypass) return;
@@ -1320,10 +1443,10 @@ function checkDmProfileCard() {
     if (!handle || RESERVED_PATHS.has(handle)) return;
     linkEl.dataset.flaggedDm = "1";
     const cached = countryCache.get(handle);
-    if (cached) { renderFlagBadge(linkEl, cached); return; }
+    if (cached) { renderFlagBadge(linkEl, cached, handle); return; }
     requestCacheEntry(handle).then((entry) => {
       if (!entry) return;
-      renderFlagBadge(linkEl, entry);
+      renderFlagBadge(linkEl, entry, handle);
     });
   });
 }
