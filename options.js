@@ -9,8 +9,11 @@ const DEFAULT_SETTINGS = {
   fetchNewAccounts: true,
   showFlags: true,
   showFlagsFilteredOnly: false,
-  blacklist: []
+  blacklist: [],
+  sharedDbEnabled: false
 };
+
+const SHARED_STATS_URL = "https://flagged.pillgates777.workers.dev/stats";
 
 const CACHE_KEY = "flagged_cache";
 let currentExtensionEnabled = DEFAULT_SETTINGS.extensionEnabled;
@@ -19,7 +22,9 @@ let currentHideMode = DEFAULT_SETTINGS.hideMode;
 let currentShowFlags = DEFAULT_SETTINGS.showFlags;
 let currentShowFlagsFilteredOnly = DEFAULT_SETTINGS.showFlagsFilteredOnly;
 let currentBlacklist = DEFAULT_SETTINGS.blacklist;
+let currentSharedDbEnabled = DEFAULT_SETTINGS.sharedDbEnabled;
 let autoSaveTimer = null;
+let statsRefreshInterval = null;
 let rateLimitInterval = null;
 let suppressBlockedAutoSave = false;
 const ICON_ON = "icons/flagged_on.png";
@@ -228,6 +233,8 @@ function saveOptions() {
   const blacklist = Array.from(new Set(blacklistLines));
   currentBlacklist = blacklist;
 
+  currentSharedDbEnabled = document.getElementById("sharedDbToggle")?.checked ?? currentSharedDbEnabled;
+
   chrome.storage.sync.set(
     {
       blockedValues: normalizedBlocked,
@@ -238,7 +245,8 @@ function saveOptions() {
       fetchNewAccounts: currentFetchNewAccounts,
       showFlags: currentShowFlags,
       showFlagsFilteredOnly: currentShowFlagsFilteredOnly,
-      blacklist
+      blacklist,
+      sharedDbEnabled: currentSharedDbEnabled
     },
     () => {
       const statuses = [
@@ -277,6 +285,10 @@ function restoreOptions() {
         ? !!data.showFlags
         : DEFAULT_SETTINGS.showFlags;
     currentShowFlagsFilteredOnly = false; // force always show flags
+    currentSharedDbEnabled =
+      data.sharedDbEnabled !== undefined
+        ? !!data.sharedDbEnabled
+        : DEFAULT_SETTINGS.sharedDbEnabled;
 
     document.getElementById("blockedValues").value =
       blockedValues.join("\n");
@@ -288,10 +300,13 @@ function restoreOptions() {
     document.getElementById("fetchNew").checked = currentFetchNewAccounts;
     document.getElementById("hideModeToggle").checked = hideMode === "hide";
     document.getElementById("showFlags").checked = currentShowFlags;
+    document.getElementById("sharedDbToggle").checked = currentSharedDbEnabled;
     currentBlacklist = blacklist;
     updateFlagFilteredToggleState();
     updateToggleButton();
     updateListBadgesFromTextareas();
+    updateDbCardState();
+    loadCacheInfo();
   });
 }
 
@@ -382,6 +397,21 @@ function onFetchNewChange(e) {
   });
 }
 
+function onSharedDbChange(e) {
+  currentSharedDbEnabled = e.target.checked;
+  chrome.storage.sync.set({ sharedDbEnabled: currentSharedDbEnabled }, () => {
+    updateDbCardState();
+    loadCacheInfo();
+    const el = document.getElementById("extensionToggleStatus");
+    if (el) {
+      el.textContent = currentSharedDbEnabled
+        ? "Shared database active"
+        : "Using local cache";
+      setTimeout(() => (el.textContent = ""), 1500);
+    }
+  });
+}
+
 function onHideModeChange(e) {
   currentHideMode = e.target.checked ? "hide" : "blur";
   chrome.storage.sync.set({ hideMode: currentHideMode }, () => {
@@ -398,12 +428,50 @@ function onHideModeChange(e) {
 
 // --- Cache controls ---
 
-function updateCacheCount(count) {
-  document.getElementById("cacheCount").textContent = String(count);
+function updateCacheCount(count, label) {
+  document.getElementById("cacheCount").textContent =
+    typeof count === "number" ? count.toLocaleString() : String(count);
+  const labelEl = document.getElementById("cacheCountLabel");
+  if (labelEl) labelEl.textContent = label || "Cached accounts:";
+}
+
+function updateDbCardState() {
+  const localActions = document.getElementById("localDbActions");
+  const descEl = document.getElementById("dbCardDesc");
+  if (localActions) localActions.style.display = currentSharedDbEnabled ? "none" : "";
+  if (descEl) {
+    descEl.textContent = currentSharedDbEnabled
+      ? "Community database — lookup results are not stored locally"
+      : "Local cache so X doesn't need to be queried every time";
+  }
+}
+
+function fetchSharedStats() {
+  fetch(SHARED_STATS_URL)
+    .then((r) => r.ok ? r.json() : null)
+    .then((data) => {
+      if (data && typeof data.entries === "number") {
+        updateCacheCount(data.entries, "Total entries:");
+      } else {
+        updateCacheCount("?", "Total entries:");
+      }
+    })
+    .catch(() => updateCacheCount("?", "Total entries:"));
 }
 
 function loadCacheInfo() {
-  idbCount().then((count) => updateCacheCount(count || 0));
+  if (statsRefreshInterval) {
+    clearInterval(statsRefreshInterval);
+    statsRefreshInterval = null;
+  }
+  if (currentSharedDbEnabled) {
+    updateCacheCount("…", "Total entries:");
+    fetchSharedStats();
+    statsRefreshInterval = setInterval(fetchSharedStats, 30000);
+  } else {
+    updateCacheCount("…", "Cached accounts:");
+    idbCount().then((count) => updateCacheCount(count || 0, "Cached accounts:"));
+  }
 }
 
 function clearCache() {
@@ -651,6 +719,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("hideModeToggle")
     .addEventListener("change", onHideModeChange);
+  document
+    .getElementById("sharedDbToggle")
+    .addEventListener("change", onSharedDbChange);
   document
     .getElementById("showFlags")
     .addEventListener("change", () => {

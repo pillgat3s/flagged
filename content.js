@@ -11,6 +11,7 @@ let fetchNewAccounts = true;
 let showFlags = true;
 let showFlagsFilteredOnly = false;
 let filterMode = "blocklist";
+let sharedDbEnabled = false;
 let whitelistHandles = new Set(DEFAULT_WHITELIST);
 let blacklistHandles = new Set(DEFAULT_BLACKLIST);
 
@@ -355,9 +356,11 @@ function loadSettings() {
       showFlags: true,
       showFlagsFilteredOnly: false,
       whitelist: DEFAULT_WHITELIST,
-      blacklist: DEFAULT_BLACKLIST
+      blacklist: DEFAULT_BLACKLIST,
+      sharedDbEnabled: false
     },
     (data) => {
+      sharedDbEnabled = !!data.sharedDbEnabled;
       blockedCountries =
         data.blockedValues ||
         data.blockedCountries ||
@@ -440,6 +443,10 @@ if (chrome.storage && chrome.storage.onChanged) {
         if (!fetchNewAccounts) handleQueue.length = 0;
       }
 
+      if (changes.sharedDbEnabled) {
+        sharedDbEnabled = !!changes.sharedDbEnabled.newValue;
+      }
+
       if (changes.hideMode) {
         hideMode = changes.hideMode.newValue || "blur";
         resetCheckedFlags();
@@ -479,12 +486,13 @@ function loadLocalDB() {
 
 function saveEntryToLocalDB(handle, country) {
   if (!handle) return;
-  bgCachePut(handle, country);
+  if (!sharedDbEnabled) bgCachePut(handle, country);
   submitToSharedDB(handle, country);
 }
 
 const SHARED_DB_URL = "https://flagged.pillgates777.workers.dev/submit";
 const SHARED_LOOKUP_URL = "https://flagged.pillgates777.workers.dev/lookup";
+const submittedHandles = new Set(); // session-level dedup — skip re-submitting known handles
 
 // Batch pending worker lookups (flush every 50ms, max 50 per request)
 const sharedLookupPending = new Map(); // handle → resolve
@@ -523,6 +531,8 @@ async function flushSharedLookups() {
 
 function submitToSharedDB(handle, country) {
   if (!handle || !country) return;
+  if (submittedHandles.has(handle)) return;
+  submittedHandles.add(handle);
   try {
     fetch(SHARED_DB_URL, {
       method: "POST",
@@ -920,9 +930,9 @@ function requestCacheEntry(handle) {
     return dbLookupPromises.get(handle);
   }
 
-  const promise = bgCacheGet(handle)
+  const promise = (sharedDbEnabled ? Promise.resolve(null) : bgCacheGet(handle))
     .then(async (stored) => {
-      if (stored && Object.prototype.hasOwnProperty.call(stored, "country")) {
+      if (!sharedDbEnabled && stored && Object.prototype.hasOwnProperty.call(stored, "country")) {
         const entry = buildCacheEntry(stored.country);
         countryCache.set(handle, entry);
         return entry;
@@ -930,7 +940,7 @@ function requestCacheEntry(handle) {
       // Check shared worker DB before hitting X API
       const workerEntry = await lookupFromSharedDB(handle);
       if (workerEntry && typeof workerEntry.country === "string") {
-        bgCachePut(handle, workerEntry.country);
+        if (!sharedDbEnabled) bgCachePut(handle, workerEntry.country);
         const entry = buildCacheEntry(workerEntry.country);
         countryCache.set(handle, entry);
         return entry;

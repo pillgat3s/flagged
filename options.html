@@ -740,20 +740,34 @@
             </div>
             <div class="card-title-wrap">
               <div class="card-title">Database</div>
-              <div class="card-desc">Local cache so X doesn't need to be queried every time</div>
+              <div class="card-desc" id="dbCardDesc">Local cache so X doesn't need to be queried every time</div>
             </div>
           </div>
-          <div class="db-actions">
-            <button id="clearCache" class="danger">Clear</button>
-            <button id="exportDb">Export</button>
-            <label class="button-like" for="importFile">Import / Merge</label>
-            <input id="importFile" type="file" accept="application/json" />
+          <div class="stack">
+            <div class="option-row">
+              <div class="option-text">
+                <label for="sharedDbToggle">Shared Database</label>
+                <span class="small">Community DB — disables local cache</span>
+              </div>
+              <label class="mini-switch">
+                <input type="checkbox" id="sharedDbToggle" />
+                <span class="mini-slider"></span>
+              </label>
+            </div>
           </div>
-          <div class="progress-bar" id="dbProgress">
-            <div class="progress-bar-fill" id="dbProgressFill"></div>
+          <div id="localDbActions">
+            <div class="db-actions" style="margin-top: 12px;">
+              <button id="clearCache" class="danger">Clear</button>
+              <button id="exportDb">Export</button>
+              <label class="button-like" for="importFile">Import / Merge</label>
+              <input id="importFile" type="file" accept="application/json" />
+            </div>
+            <div class="progress-bar" id="dbProgress">
+              <div class="progress-bar-fill" id="dbProgressFill"></div>
+            </div>
           </div>
           <div class="cache-stat">
-            Cached accounts: <strong id="cacheCount">0</strong>
+            <span id="cacheCountLabel">Cached accounts:</span> <strong id="cacheCount">0</strong>
           </div>
           <div id="cacheStatus" class="small status-line"></div>
         </div>
