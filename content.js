@@ -480,6 +480,57 @@ function loadLocalDB() {
 function saveEntryToLocalDB(handle, country) {
   if (!handle) return;
   bgCachePut(handle, country);
+  submitToSharedDB(handle, country);
+}
+
+const SHARED_DB_URL = "https://flagged.pillgates777.workers.dev/submit";
+const SHARED_LOOKUP_URL = "https://flagged.pillgates777.workers.dev/lookup";
+
+// Batch pending worker lookups (flush every 50ms, max 50 per request)
+const sharedLookupPending = new Map(); // handle → resolve
+let sharedLookupTimer = null;
+
+function lookupFromSharedDB(handle) {
+  return new Promise((resolve) => {
+    sharedLookupPending.set(handle, resolve);
+    if (!sharedLookupTimer) {
+      sharedLookupTimer = setTimeout(flushSharedLookups, 50);
+    }
+  });
+}
+
+async function flushSharedLookups() {
+  sharedLookupTimer = null;
+  const handles = [...sharedLookupPending.keys()];
+  const resolvers = new Map(sharedLookupPending);
+  sharedLookupPending.clear();
+
+  for (let i = 0; i < handles.length; i += 50) {
+    const batch = handles.slice(i, i + 50);
+    try {
+      const res = await fetch(`${SHARED_LOOKUP_URL}?users=${batch.join(",")}`);
+      if (res.ok) {
+        const data = await res.json();
+        for (const h of batch) resolvers.get(h)?.(data[h] || null);
+      } else {
+        for (const h of batch) resolvers.get(h)?.(null);
+      }
+    } catch {
+      for (const h of batch) resolvers.get(h)?.(null);
+    }
+  }
+}
+
+function submitToSharedDB(handle, country) {
+  if (!handle || !country) return;
+  try {
+    fetch(SHARED_DB_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle, country }),
+      keepalive: true
+    }).catch(() => {});
+  } catch (_) {}
 }
 
 // -----------------------------
@@ -870,9 +921,17 @@ function requestCacheEntry(handle) {
   }
 
   const promise = bgCacheGet(handle)
-    .then((stored) => {
+    .then(async (stored) => {
       if (stored && Object.prototype.hasOwnProperty.call(stored, "country")) {
         const entry = buildCacheEntry(stored.country);
+        countryCache.set(handle, entry);
+        return entry;
+      }
+      // Check shared worker DB before hitting X API
+      const workerEntry = await lookupFromSharedDB(handle);
+      if (workerEntry && typeof workerEntry.country === "string") {
+        bgCachePut(handle, workerEntry.country);
+        const entry = buildCacheEntry(workerEntry.country);
         countryCache.set(handle, entry);
         return entry;
       }
