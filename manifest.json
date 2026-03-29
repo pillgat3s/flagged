@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "Flagged",
     "version": "1.1.1",
-    "description": "Filter your X (Twitter) timeline by country. Blur or hide posts, show country flags, whitelist/blacklist handles. Local cache.",
+    "description": "See country flags on every X (Twitter) account. Filter your timeline by country — blur or hide posts.",
     "permissions": ["storage", "unlimitedStorage"],
     "icons": {
       "16": "icons/flagged_16.png",
@@ -43,9 +43,9 @@
     "browser_specific_settings": {
       "gecko": {
         "id": "pillgates.dev@gmail.com",
-        "strict_min_version": "126.0",
+        "strict_min_version": "140.0",
         "data_collection_permissions": {
-          "required": [],
+          "required": ["none"],
           "optional": []
         }
       }
