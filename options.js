@@ -10,7 +10,7 @@ const DEFAULT_SETTINGS = {
   showFlags: true,
   showFlagsFilteredOnly: false,
   blacklist: [],
-  sharedDbEnabled: false
+  sharedDbEnabled: true
 };
 
 const SHARED_STATS_URL = "https://flagged.pillgates777.workers.dev/stats";

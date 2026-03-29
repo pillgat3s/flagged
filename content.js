@@ -366,7 +366,7 @@ function loadSettings() {
       showFlagsFilteredOnly: false,
       whitelist: DEFAULT_WHITELIST,
       blacklist: DEFAULT_BLACKLIST,
-      sharedDbEnabled: false
+      sharedDbEnabled: true
     },
     (data) => {
       sharedDbEnabled = !!data.sharedDbEnabled;
