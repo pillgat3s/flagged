@@ -171,6 +171,13 @@ const COUNTRY_NAME_OVERRIDES = {
   guadeloupe: "GP",
   "brunei darussalam": "BN",
   brunei: "BN",
+  myanmar: "MM",
+  "myanmar (burma)": "MM",
+  burma: "MM",
+  bonaire: "BQ",
+  "bonaire, sint eustatius and saba": "BQ",
+  "caribbean netherlands": "BQ",
+  "bes islands": "BQ",
   "saint vincent and the grenadines": "VC",
   "saint vincent": "VC",
   "st vincent and the grenadines": "VC",
@@ -215,6 +222,8 @@ const CONTINENT_ABBREV = {
   antarctica: "ANT"
 };
 const FLAG_BADGE_CLASS = "flagged-flag-badge";
+// In-memory set of handles detected as government accounts (gray #829aab badge) this session
+const govHandles = new Set();
 let regionDisplayNames = null;
 const REGION_NAME_TO_CODE = new Map();
 let tooltipEl = null;
@@ -530,7 +539,8 @@ async function flushSharedLookups() {
 }
 
 function submitToSharedDB(handle, country) {
-  if (!handle || !country) return;
+  if (!handle) return;
+  if (!country) country = "unknown";
   if (submittedHandles.has(handle)) return;
   submittedHandles.add(handle);
   try {
@@ -1238,7 +1248,8 @@ function renderFlagBadge(el, cached, handle) {
 
   const flag = cached.flag || null;
   const continentText = cached.continent || "";
-  const locationText = cached.country || continentText || "unknown";
+  const isGovBadge = !cached.country && handle && govHandles.has(canonicalHandle(handle));
+  const locationText = cached.country || continentText || (isGovBadge ? "Government (no location provided)" : "unknown");
 
   let label = flag || locationText;
 
@@ -1283,11 +1294,11 @@ function renderFlagBadge(el, cached, handle) {
   }
   badge.setAttribute(
     "aria-label",
-    `Account location: ${cached.country || "unknown"}${continentText ? ` (${continentText})` : ""}`
+    `Account location: ${cached.country || (isGovBadge ? "Government (no location provided)" : "unknown")}${continentText ? ` (${continentText})` : ""}`
   );
   // Use a data attribute instead of title to avoid the browser's native tooltip
   // doubling up with our custom one.
-  const tooltipText = cached.country || "unknown";
+  const tooltipText = cached.country || (isGovBadge ? "Government (no location provided)" : "unknown");
   badge.addEventListener("mouseenter", (e) => showTooltip(tooltipText, e.clientX, e.clientY));
   badge.addEventListener("mousemove", (e) => showTooltip(tooltipText, e.clientX, e.clientY));
   badge.addEventListener("mouseleave", hideTooltip);
@@ -1385,6 +1396,20 @@ function addOverlay(el, country, isBlacklisted = false) {
 }
 
 // -----------------------------
+// Government badge detection
+// -----------------------------
+function hasGovernmentBadge(el) {
+  const nameEl = el.querySelector('[data-testid="User-Name"], [data-testid="UserName"]') || el;
+  return !!nameEl.querySelector('[data-testid="icon-verified"] path[fill="#829aab"]');
+}
+
+function isGovFiltered(handle) {
+  if (!handle || !govHandles.has(handle)) return false;
+  if (blacklistHandles.has("gov") || blacklistHandles.has("government")) return true;
+  return blockedCountries.some(c => { const n = (c || "").trim().toLowerCase(); return n === "gov" || n === "government"; });
+}
+
+// -----------------------------
 // Per-element logic
 // -----------------------------
 function applyFilterToElement(el, cached, handle) {
@@ -1395,26 +1420,28 @@ function applyFilterToElement(el, cached, handle) {
   const bypass = shouldBypassFiltering(el, { isBlacklisted: isBlack });
   const isSelf = !!(ownHandle && handle && canonicalHandle(handle) === ownHandle);
 
-  if (cached) renderFlagBadge(el, cached, handle);
+  const displayCached = (handle && govHandles.has(handle))
+    ? { flag: "🚩", country: null, matchesList: true, shouldFilter: false, continent: null }
+    : cached;
+  if (displayCached) renderFlagBadge(el, displayCached, handle);
 
   if (isWhite) return;
   if (bypass) return;
-  if (isSelf) return;            // own posts: keep flags, skip hiding
-  if (isBookmarksView()) return; // bookmarks: keep flags, skip hiding
+  if (isSelf) return;
+  if (isBookmarksView()) return;
 
-  const shouldFilter = isBlack || (cached && cached.shouldFilter);
-  const countryLabel = cached?.country || null;
+  const isGov = isGovFiltered(handle);
+  const shouldFilter = isBlack || isGov || (cached && cached.shouldFilter);
 
   if (!shouldFilter) return;
-
-  if (!cached && !isBlack) return;
+  if (!cached && !isBlack && !isGov) return;
 
   if (hideMode === "hide") {
     hideElement(el);
     return;
   }
 
-  addOverlay(el, countryLabel, isBlack);
+  addOverlay(el, isGov && !isBlack ? "Government" : (cached?.country || null), isBlack);
 }
 
 function checkTweet(tweetEl) {
@@ -1424,6 +1451,10 @@ function checkTweet(tweetEl) {
   const authorHandle = canonicalHandle(rawHandle);
 
   if (!authorHandle) return;
+
+  if (!govHandles.has(authorHandle) && hasGovernmentBadge(tweetEl)) {
+    govHandles.add(authorHandle);
+  }
 
   const isBlack = isBlacklisted(authorHandle);
   const cachedAuthor = countryCache.get(authorHandle);
@@ -1451,7 +1482,7 @@ function checkTweet(tweetEl) {
 
   requestCacheEntry(authorHandle).then((entry) => {
     tweetEl.dataset.flaggedDbLookupAuthor = "0";
-    if (!entry) return;
+    if (!entry && !govHandles.has(authorHandle)) return;
     applyFilterToElement(tweetEl, entry, authorHandle);
     tweetEl.dataset.flaggedProcessedAuthor = "1";
   });
@@ -1462,6 +1493,11 @@ function checkUserCell(cellEl) {
 
   const handle = canonicalHandle(getHandleFromUserCell(cellEl));
   if (!handle) return;
+
+  if (!govHandles.has(handle) && hasGovernmentBadge(cellEl)) {
+    govHandles.add(handle);
+  }
+
   const isBlack = isBlacklisted(handle);
 
   const cached = countryCache.get(handle);
@@ -1487,7 +1523,7 @@ function checkUserCell(cellEl) {
 
   requestCacheEntry(handle).then((entry) => {
     cellEl.dataset.flaggedDbLookup = "0";
-    if (!entry) return;
+    if (!entry && !govHandles.has(handle)) return;
     applyFilterToElement(cellEl, entry, handle);
     cellEl.dataset.flaggedProcessed = "1";
   });
