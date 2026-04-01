@@ -22,9 +22,9 @@ Everything runs locally. No external servers, no analytics, no data leaves your 
 
 ## Install
 
-1. Install from the Chrome Web Store (no signup required), or load unpacked from this repo
-2. Optionally import a pre-loaded database from https://t.me/pillgatesflagged to start filtering immediately
-3. Open X and watch the flags appear
+1. Install from the Chrome Web Store or from Firefox Add-ons (no signup required), or load unpacked from this repo
+2. Open X and watch the flags appear
+3. Tweak settings to your liking
 
 ## Settings
 
@@ -34,7 +34,7 @@ Click the extension icon to access:
 - **Locations** — countries to filter (names, ISO codes, flag emojis, or continents all work)
 - **Hide mode** — blur with reveal vs. fully remove
 - **Whitelist/Blacklist** — per-handle overrides
-- **Database** — export, import, merge, or clear your local cache
+- **Database** — Select Shared or Local (export, import, merge, or clear your local cache)
 
 ## Permissions
 
