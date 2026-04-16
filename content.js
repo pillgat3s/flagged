@@ -1424,7 +1424,7 @@ function applyFilterToElement(el, cached, handle) {
   const isSelf = !!(ownHandle && handle && canonicalHandle(handle) === ownHandle);
 
   const displayCached = (handle && govHandles.has(handle))
-    ? { flag: "🚩", country: null, matchesList: true, shouldFilter: false, continent: null }
+    ? { flag: "🏛️", country: null, matchesList: true, shouldFilter: false, continent: null }
     : cached;
   if (displayCached) renderFlagBadge(el, displayCached, handle);
 
