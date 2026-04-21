@@ -1,5 +1,11 @@
 // options.js – Flagged
 
+// Apply saved theme immediately before first paint
+(function () {
+  var t = localStorage.getItem("flaggedTheme") || "mono";
+  document.documentElement.dataset.theme = t;
+})();
+
 const DEFAULT_SETTINGS = {
   blockedValues: ["India"],
   hideMode: "blur",      // "blur" | "hide"
@@ -778,9 +784,23 @@ document.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("aboutButton")
     .addEventListener("click", () => {
-      // TODO: Update this URL when website is ready
       const websiteUrl = "https://pillgates.dev/flagged";
       window.open(websiteUrl, "_blank");
     });
   window.addEventListener("beforeunload", saveOptions);
+
+  // Theme toggle
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    const btn = document.getElementById("themeToggle");
+    if (btn) btn.textContent = theme === "mono" ? "MODERN" : "MONO";
+  }
+  function toggleTheme() {
+    const next = document.documentElement.dataset.theme === "mono" ? "modern" : "mono";
+    applyTheme(next);
+    localStorage.setItem("flaggedTheme", next);
+  }
+  const savedTheme = localStorage.getItem("flaggedTheme") || "mono";
+  applyTheme(savedTheme);
+  document.getElementById("themeToggle").addEventListener("click", toggleTheme);
 });
